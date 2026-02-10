@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://${N8N_HOST}/
+      - GENERIC_TIMEZONE=Asia/Tokyo
+    volumes:
+      - ~/.n8n:/home/node/.n8n
+      - ./n8n/workflows:/backup/workflows
+    networks:
+      - recruitment-network
+
+  dify-api:
+    image: langgenius/dify-api:latest
+    restart: always
+    environment:
+      - MODE=api
+      - DB_USERNAME=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=dify
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - recruitment-network
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=dify
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - recruitment-network
+
+  redis:
+    image: redis:6-alpine
+    restart: always
+    networks:
+      - recruitment-network
+
+volumes:
+  postgres_data:
+
+networks:
+  recruitment-network:
+    driver: bridge

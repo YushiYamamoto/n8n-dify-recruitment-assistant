@@ -1,0 +1,222 @@
+{
+  "name": "採用自動化ワークフロー",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "recruitment-webhook",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook - 応募受付",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 入力データを Dify 用に整形\nconst formData = items[0].json.body;\n\nreturn [\n  {\n    json: {\n      inputs: {\n        job_type: formData.job_type || \"未記入\",\n        motivation: formData.motivation || \"\",\n        skills: formData.skills || \"\",\n        experience: formData.experience || \"\",\n        email: formData.email,\n        name: formData.name\n      },\n      response_mode: \"blocking\",\n      user: \"recruitment-system\"\n    }\n  }\n];"
+      },
+      "id": "function-node",
+      "name": "Function - データ整形",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://dify-api:5001/v1/workflows/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "dify-api-node",
+      "name": "HTTP Request - Dify API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dify-api-credential",
+          "name": "Dify API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.data.outputs.rank }}",
+              "operation": "equals",
+              "value2": "S"
+            },
+            {
+              "value1": "={{ $json.data.outputs.rank }}",
+              "operation": "equals",
+              "value2": "A"
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "if-node",
+      "name": "IF - ランク判定",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#recruitment-alerts",
+        "text": "🔥 激アツな応募が来ました！\n\n名前: {{ $json.data.outputs.name }}\nランク: {{ $json.data.outputs.rank }}\n要約: {{ $json.data.outputs.summary }}\n理由: {{ $json.data.outputs.reason }}\n\n詳細は Gmail の下書きを確認してください。",
+        "otherOptions": {}
+      },
+      "id": "slack-node",
+      "name": "Slack - 激アツ通知",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1300, 150],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "subject": "={{ $json.data.outputs.email_subject }}",
+        "message": "={{ $json.data.outputs.email_body }}\n\n---\n日程調整はこちら: https://calendly.com/your-link/30min",
+        "toList": "={{ $json.data.outputs.email }}",
+        "options": {}
+      },
+      "id": "gmail-node",
+      "name": "Gmail - 下書き作成",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1300, 350],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credential",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GAS_WEB_APP_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={{ JSON.stringify({ name: $json.data.outputs.name, email: $json.data.outputs.email, rank: $json.data.outputs.rank, summary: $json.data.outputs.summary, skills: $json.data.outputs.skills }) }}",
+        "options": {}
+      },
+      "id": "gas-api-node",
+      "name": "HTTP Request - GAS Web API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1300, 550]
+    }
+  ],
+  "connections": {
+    "Webhook - 応募受付": {
+      "main": [
+        [
+          {
+            "node": "Function - データ整形",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - データ整形": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Dify API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Dify API": {
+      "main": [
+        [
+          {
+            "node": "IF - ランク判定",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - ランク判定": {
+      "main": [
+        [
+          {
+            "node": "Slack - 激アツ通知",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail - 下書き作成",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request - GAS Web API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tokyo",
+    "errorWorkflow": ""
+  },
+  "tags": [
+    {
+      "name": "recruitment",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "pinData": {}
+}

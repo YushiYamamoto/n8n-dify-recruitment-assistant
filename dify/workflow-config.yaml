@@ -1,0 +1,44 @@
+# Dify ワークフロー設定
+# このファイルはDifyの設定参考用です。実際の設定はDify UIから行ってください。
+
+app:
+  name: "採用アシスタント"
+  type: "workflow"
+  description: "応募者データをAIで評価し、ランク付けを行うワークフロー"
+
+model:
+  provider: "anthropic"
+  name: "claude-3-5-sonnet-20241022"
+  parameters:
+    temperature: 0.3
+    max_tokens: 1024
+
+input_variables:
+  - name: "job_type"
+    type: "string"
+    description: "応募職種"
+    required: true
+  - name: "motivation"
+    type: "string"
+    description: "志望動機"
+    required: true
+  - name: "skills"
+    type: "string"
+    description: "スキルセット"
+    required: true
+  - name: "experience"
+    type: "string"
+    description: "実務経験"
+    required: true
+  - name: "name"
+    type: "string"
+    description: "応募者名"
+    required: true
+  - name: "email"
+    type: "string"
+    description: "メールアドレス"
+    required: true
+
+output_format: "json"
+
+prompt_file: "prompts/evaluation-prompt.txt"
